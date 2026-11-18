@@ -19,6 +19,19 @@ if (Test-Path -LiteralPath $exe -PathType Leaf) {
 } else {
     Write-Warning "Arquivo OurGit instalado nao encontrado."
 }
+function Get-OurGitEventData {
+    param($Record)
+    $xml = [xml]$Record.ToXml()
+    $values = [ordered]@{}
+    foreach ($data in @($xml.Event.EventData.Data)) {
+        if ($null -eq $data) { continue }
+        $key = [string]$data.Name
+        if ([string]::IsNullOrWhiteSpace($key)) { $key = "Value$($values.Count + 1)" }
+        $values[$key] = [string]$data.InnerText
+    }
+    return $values
+}
+
 Write-Host ""
 Write-Host "=== CODE INTEGRITY 3077 / 3089 / 3092 ===" -ForegroundColor Cyan
 $events = @(Get-WinEvent -FilterHashtable @{
@@ -40,17 +53,56 @@ foreach ($block in ($blocks | Select-Object -First 5)) {
         Policy = if ($match.Success) { $match.Groups[1].Value } else { "indisponivel" }
         ActivityId = $activity
     } | Format-List
+    $blockData = Get-OurGitEventData -Record $block
+    if ($blockData.Count -gt 0) {
+        Write-Host "Campos estruturados do bloqueio 3077:" -ForegroundColor DarkCyan
+        $blockData.GetEnumerator() | ForEach-Object {
+            [pscustomobject]@{ Campo = $_.Key; Valor = $_.Value }
+        } | Format-Table -AutoSize -Wrap
+    }
     if ($activity) {
         foreach ($other in $events) {
             if ($other.Id -notin @(3089, 3092)) { continue }
             $otherXml = [xml]$other.ToXml()
             if ([string]$otherXml.Event.System.Correlation.ActivityID -eq $activity) {
-                Write-Host ("Evento correlacionado " + $other.Id + ":")
-                Write-Host $other.Message
+                Write-Host ("Evento correlacionado " + $other.Id + " (dados estruturados):")
+                $data = Get-OurGitEventData -Record $other
+                if ($data.Count -gt 0) {
+                    $data.GetEnumerator() | ForEach-Object {
+                        [pscustomobject]@{ Campo = $_.Key; Valor = $_.Value }
+                    } | Format-Table -AutoSize -Wrap
+                } else {
+                    Write-Host "EventData indisponivel neste registro."
+                }
             }
         }
     }
 }
+Write-Host ""
+Write-Host "=== CARREGAMENTO DE POLITICAS (3099) ===" -ForegroundColor Cyan
+$policyEvents = @(Get-WinEvent -FilterHashtable @{
+    LogName = "Microsoft-Windows-CodeIntegrity/Operational"
+    StartTime = (Get-Date).AddDays(-14)
+    Id = 3099
+} -ErrorAction SilentlyContinue | Select-Object -First 30)
+$policyId = "0283ac0f-fff1-49ae-ada1-8a933130cad6"
+$matched = 0
+foreach ($entry in $policyEvents) {
+    $details = Get-OurGitEventData -Record $entry
+    $flat = ($details.Values -join ' ') + ' ' + $entry.Message
+    if ($flat -match [regex]::Escape($policyId)) {
+        $matched++
+        Write-Host ("Politica encontrada: " + $entry.TimeCreated)
+        $details.GetEnumerator() | ForEach-Object {
+            [pscustomobject]@{ Campo = $_.Key; Valor = $_.Value }
+        } | Format-Table -AutoSize -Wrap
+    }
+}
+if ($matched -eq 0) {
+    Write-Host "Sem evento 3099 correspondente nos ultimos 14 dias (o log pode ter sido rotacionado)."
+}
+Write-Host "Este relatorio e somente leitura; a TI deve confirmar a regra de autorizacao."
+
 if ($CompareReleases) {
     Write-Host ""
     Write-Host "=== COMPARANDO RELEASES OFFLINE, SEM EXECUTAR O CODIGO ===" -ForegroundColor Cyan

@@ -9,7 +9,8 @@ class AppControlDiagnosticsTests(unittest.TestCase):
         s = (ROOT / "scripts/diagnose_windows_appcontrol.ps1").read_text(encoding="utf-8")
         for token in ("v0.2.0", "v0.3.1", "3077, 3089, 3092",
                       "Get-FileHash", "Get-AuthenticodeSignature", "SHA256",
-                      "CodeIntegrity/Operational", "Expand-Archive"):
+                      "CodeIntegrity/Operational", "Expand-Archive",
+                      "Get-OurGitEventData", "Id = 3099"):
             self.assertIn(token, s)
         for forbidden in ("Set-ExecutionPolicy", "Unblock-File", "Set-MpPreference",
                           "Set-CIPolicy", "Start-Process", "& $binary", "& $exe"):
