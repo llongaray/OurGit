@@ -22,7 +22,7 @@ import tempfile
 import time
 from urllib.parse import quote
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 INSTALL_URL = "https://raw.githubusercontent.com/llongaray/OurGit/main/install/install.sh"
 BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.:-]*$")
