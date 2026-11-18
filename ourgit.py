@@ -564,6 +564,56 @@ def cmd_remote_status(args):
     print(ssh_cmd(remote, command).stdout)
 
 
+def cmd_server_report(args):
+    repo, path = server_cfg(args.repo)
+    cfg = read_json(path, None)
+    if not cfg:
+        raise OurGitError("Agente nao inicializado.")
+    branch = cfg["branch"]
+    ref = f"refs/heads/{branch}"
+    commit = git("rev-parse", ref, path=repo, check=False)
+    head = commit.stdout.strip() if commit.returncode == 0 else None
+    result = {"repo": str(repo), "branch": branch, "remote_head": head,
+              "worktree": cfg["worktree"], "worktree_head": None,
+              "ahead": None, "behind": None, "dirty": [],
+              "action_enabled": cfg["action"]["enabled"]}
+    work = Path(cfg["worktree"])
+    if (work / ".git").exists():
+        tracked = git("rev-parse", "HEAD", path=work, check=False)
+        if tracked.returncode == 0:
+            result["worktree_head"] = tracked.stdout.strip()
+            result["dirty"] = local_changes(work)
+            if head:
+                c = counts(work, head)
+                if c:
+                    result["ahead"], result["behind"] = c
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_vps_status(args):
+    root = repo_root(args.path)
+    _, remote = selected(root, args.remote)
+    if not remote.get("host"):
+        raise OurGitError("Este remote nao possui agente SSH configurado.")
+    command = '"$HOME/.local/bin/ourgit" server report --repo ' + shlex.quote(remote["repo"])
+    report = ssh_cmd(remote, command, timeout=40)
+    data = json.loads(report.stdout)
+    print(f"VPS {remote['host']} | branch {data['branch']}")
+    print(f"Git bare HEAD: {data['remote_head'] or '(ainda sem push)'}")
+    print(f"Checkout: {data['worktree']}")
+    if data["worktree_head"]:
+        print(f"Checkout HEAD: {data['worktree_head']}")
+        print(f"Checkout -> bare: {data['ahead']} commit(s) a enviar")
+        print(f"Bare -> checkout: {data['behind']} commit(s) a receber")
+        changes = data["dirty"]
+        print(f"Alteracoes nao commitadas na VPS: {len(changes)}")
+        for item in changes[:60]:
+            print("  " + item)
+    else:
+        print("Checkout da VPS ainda nao criado (action nao executada).")
+    print("Action habilitada:", "SIM" if data["action_enabled"] else "NAO")
+
+
 def parser():
     p = argparse.ArgumentParser(prog="ourgit", description="OurGit - Git e deploy por SSH para VPS")
     p.add_argument("--version", action="version", version=f"OurGit {VERSION}")
@@ -644,6 +694,9 @@ def parser():
     slog.add_argument("--repo", required=True)
     slog.add_argument("--lines", type=int, default=30)
     slog.set_defaults(func=cmd_server_log)
+    report = srv.add_parser("report")
+    report.add_argument("--repo", required=True)
+    report.set_defaults(func=cmd_server_report)
     rec = srv.add_parser("receive")
     rec.add_argument("--repo", required=True)
     rec.add_argument("--ref", required=True)
@@ -657,6 +710,10 @@ def parser():
     remote_status.add_argument("--remote", default=None)
     remote_status.add_argument("--path", default=".")
     remote_status.set_defaults(func=cmd_remote_status)
+    remote_worktree = sub.add_parser("vps-status", help="Comparar bare Git e checkout da VPS via SSH")
+    remote_worktree.add_argument("--remote", default=None)
+    remote_worktree.add_argument("--path", default=".")
+    remote_worktree.set_defaults(func=cmd_vps_status)
     return p
 
 

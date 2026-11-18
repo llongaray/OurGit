@@ -98,6 +98,10 @@ class OurGitTests(unittest.TestCase):
         self.assertEqual((self.root / "deployed.txt").read_text(),
                          run("git", "rev-parse", "HEAD", cwd=self.client).stdout.strip())
         self.assertIn("SUCESSO", self.app("server", "log", "--repo", bare).stdout)
+        report = self.app("server", "report", "--repo", bare).stdout
+        self.assertIn('"ahead": 0', report)
+        self.assertIn('"behind": 0', report)
+        self.assertIn('"action_enabled": true', report)
 
     @unittest.skipIf(os.name == "nt", "Servidor requer Linux")
     def test_action_script_inside_worktree_is_rejected(self):

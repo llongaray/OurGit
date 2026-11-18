@@ -75,7 +75,7 @@ mkdir -p ~/actions
 
 Após receber push da branch configurada, o agente bloqueia concorrência, cria/atualiza um checkout separado por **fast-forward**, exige worktree limpa, executa o script aprovado e grava o resultado em `ourgit-actions.log`. Os comandos do script têm as permissões do usuário SSH. **Um push aceito não garante deploy bem-sucedido**: verifique os logs.
 
-Consultar configuração de action pela máquina de desenvolvimento: `ourgit action-status --remote vps-hml`.
+Consultar configuração de action pela máquina de desenvolvimento: `ourgit action-status --remote vps-hml`. Para comparar commits do bare e arquivos não commitados do checkout remoto, execute `ourgit vps-status --remote vps-hml`.
 
 Se houver modificações na VPS, faça `git add`, `git commit` e `git push origin hml` no checkout do servidor; no PC use `ourgit pull`. A worktree suja bloqueia deploy para não descartar alterações. Não há rollback automático nesta versão; use backups e healthchecks do serviço.
 
