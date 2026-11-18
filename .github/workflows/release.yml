@@ -39,6 +39,14 @@ jobs:
               assert p.returncode == 0, (args, p.stdout, p.stderr)
           print('Executavel validado para plataforma:', sys.platform)
           PY
+      - name: Assinar Windows quando certificado autorizado estiver configurado
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          OURGIT_CODESIGN_PFX_BASE64: ${{ secrets.OURGIT_CODESIGN_PFX_BASE64 }}
+          OURGIT_CODESIGN_PFX_PASSWORD: ${{ secrets.OURGIT_CODESIGN_PFX_PASSWORD }}
+          OURGIT_REQUIRE_SIGNED_RELEASE: ${{ vars.OURGIT_REQUIRE_SIGNED_RELEASE }}
+        run: ./scripts/sign_windows.ps1
       - name: Empacotar plataforma
         run: python scripts/package_release.py --platform ${{ matrix.platform }}
       - uses: actions/upload-artifact@v4
@@ -77,7 +85,7 @@ jobs:
             echo "Release $TAG ja publicada. Para atualizar, crie uma nova tag vX.Y.Z."
             exit 0
           fi
-          gh release create "$TAG" release/ourgit-linux-x86_64.tar.gz release/ourgit-windows-x86_64.zip release/checksums.txt \
+          gh release create "$TAG" release/ourgit-linux-x86_64.tar.gz release/ourgit-windows-x86_64.zip release/windows-signature.json release/checksums.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "OurGit $TAG" --latest \
             --notes "OurGit CLI Windows/Linux. Instaladores em install/ com verificacao SHA256."
