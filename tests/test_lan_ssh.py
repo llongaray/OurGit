@@ -68,6 +68,15 @@ class LANSSHConfigurationTests(unittest.TestCase):
         self.assertIn("installation happens over outbound HTTPS", readme[en:])
         self.assertIn("source-code synchronization happens over Git-over-SSH", readme[en:])
 
+    def test_windows_documentation_supports_restricted_execution_policy(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        pt, en = readme.split("# English documentation", 1)
+        expected = 'Get-Content -LiteralPath "$env:TEMP\\install-ourgit.ps1" -Raw | Invoke-Expression'
+        self.assertIn(expected, pt)
+        self.assertIn(expected, en)
+        self.assertNotIn('& "$env:TEMP\\install-ourgit.ps1"', readme)
+        self.assertIn("Get-ExecutionPolicy -List", readme)
+
     def test_both_https_installers_present(self):
         linux = (ROOT / "install" / "install.sh").read_text(encoding="utf-8")
         win = (ROOT / "install" / "install.ps1").read_text(encoding="utf-8")

@@ -136,8 +136,10 @@ Para auditar antes de executar:
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/llongaray/OurGit/main/install/install.ps1 -OutFile "$env:TEMP\install-ourgit.ps1"
 notepad "$env:TEMP\install-ourgit.ps1"
-& "$env:TEMP\install-ourgit.ps1"
+Get-Content -LiteralPath "$env:TEMP\install-ourgit.ps1" -Raw | Invoke-Expression
 ```
+
+> **PowerShell com Execution Policy restrita:** o comando direto `& ".\\install-ourgit.ps1"` pode gerar `PSSecurityException` mesmo após uma instalação válida. Depois de revisar e aprovar o conteúdo do arquivo, a execução acima usa `Invoke-Expression` na sessão atual sem alterar `Set-ExecutionPolicy` no computador. Se a política da empresa proibir essa execução, solicite liberação ao TI. Confira com `Get-ExecutionPolicy -List`. O OurGit já instalado não precisa ser reinstalado.
 
 ### Linux — Bash (terminal da VPS)
 
@@ -658,8 +660,10 @@ Inspect before running if required by corporate policy:
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/llongaray/OurGit/main/install/install.ps1 -OutFile "$env:TEMP\install-ourgit.ps1"
 notepad "$env:TEMP\install-ourgit.ps1"
-& "$env:TEMP\install-ourgit.ps1"
+Get-Content -LiteralPath "$env:TEMP\install-ourgit.ps1" -Raw | Invoke-Expression
 ```
+
+> **Restricted PowerShell Execution Policy:** invoking a downloaded `.ps1` with `&` may result in `PSSecurityException` even after a successful in-memory installation. The audited `Get-Content -Raw | Invoke-Expression` form above runs the reviewed content in the current session without changing the machine-wide execution policy. Follow company IT policy, and inspect settings with `Get-ExecutionPolicy -List`. You do not need to reinstall a working OurGit binary.
 
 ### Linux bash (run in the VPS terminal)
 
