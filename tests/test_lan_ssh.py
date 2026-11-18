@@ -23,7 +23,7 @@ class LANSSHConfigurationTests(unittest.TestCase):
         self.work = Path(self.tmp.name) / "my-project"
         subprocess.run(["git", "init", str(self.work)], check=True,
                        capture_output=True, text=True)
-        self.assertEqual(ourgit.VERSION, "0.2.0")
+        self.assertEqual(ourgit.VERSION, "0.3.0")
         ourgit.cmd_init(argparse.Namespace(path=str(self.work), git_init=False))
 
     def test_private_ip_and_custom_ssh_port_without_public_ssh(self):

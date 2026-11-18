@@ -516,6 +516,138 @@ A action também nasce desabilitada e o timer só é instalado mediante comando 
 | `ourgit server init / action / log / deploy` | Operação na VPS Linux |
 | `ourgit agent init / check / timer` | Pull HTTPS alternativo, sem SSH de entrada |
 
+## Histórico de commits, auditoria de máquinas e recuperação (v0.3.0)
+
+**Não é preciso um servidor dedicado para guardar versões anteriores:** o próprio **Git armazena commits, árvores e conteúdos** no repositório local (`.git`), no bare Git existente de uma VPS ou em qualquer remoto Git convencional. O OurGit v0.3.0 adiciona uma CLI de leitura e recuperação segura sobre esses recursos.
+
+> A recuperação depende de os commits ainda existirem em **alguma cópia acessível do repositório**. Se todas as cópias forem perdidas ou commits inalcançáveis forem eliminados pelo Git, não há como reconstruí-los. Uma cópia externa ou backup regular continua sendo recomendada; **não é necessário hospedar um serviço adicional de histórico**.
+
+### Ver commits antigos mesmo antes de vincular a VPS
+
+```powershell
+# No diretorio do VivoMonitor (ou de qualquer Git local)
+ourgit history
+ourgit history --limit 50
+ourgit history --all
+
+# JSON para pipelines, logs ou dashboards locais
+ourgit history --json
+ourgit history --json --limit 100
+
+# Inspecionar autor, data e mudancas do commit
+ourgit show a1b2c3d
+
+# Exibir conteudo antigo de arquivo
+ourgit show a1b2c3d --file vivomonitor/web/app.py
+
+# Comparar duas versoes
+ourgit diff --from a1b2c3d --to 9e8f7a6 --names
+ourgit diff --from a1b2c3d --to 9e8f7a6
+```
+
+Substitua os SHAs ilustrativos por IDs de `ourgit history`. Histórico não depende de um remote OurGit cadastrado. O comando `history --json` expõe um objeto por commit com SHA, data, autor, assunto e metadados de auditoria caso existam.
+
+### Auditoria automática: máquina, IP LAN e IP público de saída
+
+A auditoria é **opcional e configurada por repositório**. Ao ativá-la, o OurGit instala um hook `post-commit` no Git, que funciona tanto para `ourgit commit` quanto para `git commit` e commits criados pela IDE (desde que disparem hooks Git).
+
+**Modo recomendado (dados privados na máquina):**
+
+```powershell
+ourgit audit enable
+ourgit audit status
+
+# Criar commit normalmente:
+ourgit add --all
+ourgit commit -m "feat: atualizar aplicacao"
+
+# Relatorio local de auditoria
+ourgit audit log
+ourgit audit log --json
+```
+
+Dados registrados: SHA, branch, autor e data Git, assunto, nome do computador, IP local estimado pela interface de rota e horário UTC. Eles são escritos em **`.git/ourgit-audit.jsonl`**, fora dos commits e sem transmissão automática para a VPS/GitHub. Esse arquivo **não é criptografado**: proteja acesso ao diretório `.git`.
+
+**O IP público não é coletado por padrão.** Se autorizado para auditoria interna:
+
+```powershell
+ourgit audit enable --public-ip
+```
+
+Nessa modalidade o OurGit faz uma requisição HTTPS a `https://api.ipify.org` quando registra cada commit, para identificar o **IP público de saída**. Esse pode ser o IP de NAT, proxy ou VPN, não necessariamente o IP exclusivo do PC. O serviço externo recebe a conexão. Se estiver indisponível, fica marcado `unavailable` e o commit continua.
+
+**Transportar os dados nos próprios commits (requer autorização explícita):**
+
+```powershell
+ourgit audit enable --embed --confirm-share
+
+# Para incluir tambem IP publico:
+ourgit audit enable --public-ip --embed --confirm-share
+```
+
+Nesse modo, o hook `prepare-commit-msg` adiciona *Git trailers* como `OurGit-Machine`, `OurGit-LAN-IP`, `OurGit-Public-IP` (quando solicitado) e `OurGit-UTC` ao texto dos **novos commits**. Portanto, esses dados acompanham `push` para GitHub e VPS e podem ficar permanentemente disponíveis a outras pessoas. **Evite em repositórios públicos ou com dados de rede sensíveis.** A ferramenta nunca falsifica ou reconstrói IPs de commits antigos.
+
+Para parar a coleta:
+
+```powershell
+ourgit audit disable
+```
+
+A desativação remove apenas os hooks identificados como pertencentes ao OurGit, **sem apagar auditorias anteriores**. Se já houver um `post-commit` ou `prepare-commit-msg` de outra ferramenta, o OurGit recusa sobrescrevê-lo. Os campos de máquina/IP são **declarativos**, não uma prova criptográfica de identidade; uma política de commits assinados oferece garantia diferente.
+
+### Recuperar arquivo específico de um commit antigo
+
+```powershell
+# 1. Visualizar o plano sem alterar codigo
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py
+
+# 2. Se o destino estiver limpo, recuperar apenas esse arquivo
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py --apply
+
+# 3. Se houver mudancas nao commitadas, so prosseguir com backup explicito
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py --backup --apply
+
+git status --short
+```
+
+O comando **não executa push ou commit automaticamente**. Quando solicitado, cria backup das mudanças locais em `.git/ourgit-backups/` antes de substituir o arquivo. Caminhos fora do projeto são recusados.
+
+### Recuperar o código completo de uma versão anterior
+
+Em vez de sobrescrever o branch atual com `git reset --hard`, crie uma **nova branch** apontando para o commit anterior:
+
+```powershell
+ourgit recover --commit a1b2c3d --branch recovery/antes-da-alteracao
+ourgit recover --commit a1b2c3d --branch recovery/antes-da-alteracao --apply
+
+# So depois de revisar, pode trocar para essa branch:
+git switch recovery/antes-da-alteracao
+```
+
+A criação da branch de recuperação mantém a branch atual, arquivos e remotos intactos. O `git switch` é uma etapa manual e independente.
+
+### Reverter um commit sem apagar o histórico
+
+```powershell
+ourgit revert 9e8f7a6
+ourgit revert 9e8f7a6 --apply
+```
+
+Com `--apply`, o OurGit chama `git revert --no-edit` após confirmar que a worktree está limpa. Isso cria **um novo commit inverso**, mantendo os commits antigos. Reversão de merge/root ou conflitos complexos precisa ser tratada manualmente.
+
+### Pipeline de histórico e auditoria
+
+O formato JSON já permite que outras ferramentas ou GitHub Actions consumam o histórico, por exemplo:
+
+```powershell
+ourgit history --all --limit 100 --json |
+  Out-File -Encoding utf8 ".\historico-ourgit.json"
+```
+
+Esse arquivo é um **relatório gerado**, não um banco de dados nem um servidor dedicado. Se houver dados de IP na saída, trate o relatório como sensível e não publique como artefato público de CI. Os hooks funcionam localmente, independentemente de o SSH da VPS estar configurado.
+
+---
+
 ## Desenvolvimento, builds e licença
 
 A implementação inicial usa **Python 3.10+**, sem dependências Python obrigatórias para execução pelo código-fonte. Os binários são produzidos com **PyInstaller** no GitHub Actions; Git e SSH permanecem instalados no sistema operacional.
@@ -1014,6 +1146,122 @@ HTTPS credentials for private repositories must be configured securely, with rea
 | `ourgit action-status --remote N` | Inspect remote action |
 | `ourgit server init / action / log / deploy` | Operate Linux server agent |
 | `ourgit agent init / check / timer` | Optional outbound HTTPS Pull Agent |
+
+## Commit history, machine auditing, and safe recovery (v0.3.0)
+
+**No dedicated history server is necessary.** Git already stores commits and historical file contents in its object database inside each clone (`.git`), a VPS bare repository, or a regular Git remote. OurGit provides history, audit, and safe recovery commands on top of Git.
+
+> Recovery requires the desired objects to still exist in at least **one available repository copy**. If every replica is lost or unreachable objects have been pruned, recovery may be impossible. Maintain independent backups as appropriate; there is no requirement to run a new always-on server.
+
+### Read commit history before configuring a VPS remote
+
+```powershell
+ourgit history
+ourgit history --limit 50
+ourgit history --all
+ourgit history --json --limit 100
+ourgit show a1b2c3d
+ourgit show a1b2c3d --file vivomonitor/web/app.py
+ourgit diff --from a1b2c3d --to 9e8f7a6 --names
+ourgit diff --from a1b2c3d --to 9e8f7a6
+```
+
+Replace example SHAs with those listed by `ourgit history`. The JSON report contains commit SHA, date, author, title, and available machine/IP audit details. None of these history commands require an OurGit remote.
+
+### Optional commit auditing: hostname and private/public IP
+
+**Auditing is opt-in for each repository.** Enabling installs a Git `post-commit` hook, so it captures new commits created through OurGit, ordinary Git CLI, or IDE Git integration that runs hooks.
+
+**Private local-only audit (recommended):**
+
+```powershell
+ourgit audit enable
+ourgit audit status
+ourgit add --all
+ourgit commit -m "feat: update application"
+ourgit audit log
+ourgit audit log --json
+```
+
+Records include SHA, branch, Git author/timestamp, subject, hostname, a route-selected local IP, and the audit UTC timestamp. They are stored in **`.git/ourgit-audit.jsonl`**, not added to shared Git commits. This file is plaintext; secure access to your local `.git` directory.
+
+**Public IP lookup is disabled by default.** To opt in:
+
+```powershell
+ourgit audit enable --public-ip
+```
+
+This makes an outbound HTTPS request to `https://api.ipify.org` per recorded commit. The result is the **public egress IP**, potentially representing corporate NAT, VPN, or a proxy rather than a unique host. The external IP service sees the request. Offline failures are recorded as `unavailable` without blocking commits.
+
+**Portable metadata in commit trailers (explicit consent required):**
+
+```powershell
+ourgit audit enable --embed --confirm-share
+
+# Also share the public egress IP if explicitly intended:
+ourgit audit enable --public-ip --embed --confirm-share
+```
+
+The `prepare-commit-msg` hook adds fields such as `OurGit-Machine`, `OurGit-LAN-IP`, optional `OurGit-Public-IP`, and `OurGit-UTC` to **new commits**. They will be carried by pushes to GitHub and VPS. These values may remain permanently visible in shared or public repositories; **do not enable this mode without reviewing your network privacy requirements**. OurGit cannot reconstruct machine/IP details for older commits.
+
+To disable hooks while preserving previous records:
+
+```powershell
+ourgit audit disable
+```
+
+OurGit refuses to overwrite third-party Git hooks. Machine and IP metadata are **self-reported**, not cryptographically authenticated device identity; signed commits address a separate concern.
+
+### Recover one file from a previous commit
+
+```powershell
+# Preview: no modifications
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py
+
+# Apply when working-tree file is clean
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py --apply
+
+# Preserve outstanding changes in .git/ourgit-backups before restoration
+ourgit recover --commit a1b2c3d --file vivomonitor/web/app.py --backup --apply
+
+git status --short
+```
+
+Recovery does not automatically commit or push. Files outside the repository are rejected. Outstanding changes block restoration unless the backup option is explicitly supplied.
+
+### Recover the full source tree into a new branch
+
+Avoid overwriting your current branch via hard reset:
+
+```powershell
+ourgit recover --commit a1b2c3d --branch recovery/previous-working-version
+ourgit recover --commit a1b2c3d --branch recovery/previous-working-version --apply
+
+# Switch only when you are ready:
+git switch recovery/previous-working-version
+```
+
+Creating the recovery branch does **not** change the current checkout, HEAD, or remotes.
+
+### Revert a commit without destroying history
+
+```powershell
+ourgit revert 9e8f7a6
+ourgit revert 9e8f7a6 --apply
+```
+
+The apply form requires a clean working tree and creates an inverse commit using `git revert --no-edit`. The original historical commit is kept. Merge/root reverts and complex conflicts need manual Git resolution.
+
+### Use history JSON in pipelines
+
+```powershell
+ourgit history --all --limit 100 --json |
+  Out-File -Encoding utf8 ".\ourgit-history.json"
+```
+
+This output is a report, **not a dedicated database/server**. Treat it as sensitive if IP or machine metadata are included; do not upload network inventory to public CI artifacts. Local audit hooks work whether or not a VPS is currently reachable over SSH.
+
+---
 
 ## Development, releases, and licensing
 
