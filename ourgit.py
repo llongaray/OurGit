@@ -32,6 +32,14 @@ class OurGitError(Exception):
 
 
 def execute(args, *, cwd=None, check=True, capture=True, env=None, input_text=None, timeout=180):
+    # O Git exporta GIT_DIR/GIT_WORK_TREE durante hooks. Se herdados, fazem
+    # clone/fetch/checkout atuar no bare errado em vez da worktree selecionada.
+    if args and Path(str(args[0])).name.lower() in ("git", "git.exe"):
+        env = dict(os.environ if env is None else env)
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX",
+                    "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY",
+                    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_QUARANTINE_PATH"):
+            env.pop(key, None)
     proc = subprocess.run([str(a) for a in args], cwd=cwd, env=env,
                           input=input_text, text=True, capture_output=capture,
                           timeout=timeout)
