@@ -1,0 +1,51 @@
+name: OurGit - Histórico de Commits
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      include_network_metadata:
+        description: 'Incluir hostname/IPs? ATENCAO: o artefato pode ser acessivel a colaboradores'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  history:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Gerar historico Git sem servidor
+        shell: bash
+        run: |
+          set -eu
+          python ourgit.py history --all --limit 1000 --json > "$RUNNER_TEMP/ourgit-history-source.json"
+      - name: Ocultar IPs automaticamente ou incluir por opt-in manual
+        shell: bash
+        env:
+          ALLOW_NETWORK: ${{ inputs.include_network_metadata }}
+          IS_MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -eu
+          mkdir -p reports
+          if [[ "$IS_MANUAL" == "true" && "$ALLOW_NETWORK" == "true" ]]; then
+            echo "::warning::Relatorio pode conter metadados de rede em commits."
+            python scripts/export_history.py --input "$RUNNER_TEMP/ourgit-history-source.json" \
+              --output reports/ourgit-history.json --include-network
+          else
+            python scripts/export_history.py --input "$RUNNER_TEMP/ourgit-history-source.json" \
+              --output reports/ourgit-history.json
+          fi
+      - name: Artefato de historico
+        uses: actions/upload-artifact@v4
+        with:
+          name: ourgit-history-${{ github.run_id }}
+          path: reports/ourgit-history.json
+          retention-days: 7
+          if-no-files-found: error

@@ -34,7 +34,7 @@ jobs:
           python - <<'PY'
           import pathlib, subprocess, sys
           exe = pathlib.Path('dist/ourgit.exe' if sys.platform == 'win32' else 'dist/ourgit')
-          for args in [('--version',), ('--help',), ('connect', '--help'), ('agent', '--help')]:
+          for args in [('--version',), ('--help',), ('connect', '--help'), ('agent', '--help'), ('history', '--help'), ('recover', '--help'), ('audit', '--help')]:
               p = subprocess.run([str(exe.resolve()), *args], capture_output=True, text=True, timeout=40)
               assert p.returncode == 0, (args, p.stdout, p.stderr)
           print('Executavel validado para plataforma:', sys.platform)
