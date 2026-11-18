@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.spec
+build/
+dist/
+release/
+.venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+ourgit.local.json
