@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""OurGit: Git + SSH para repositorios locais, VPS e deploy por branch.
+"""OurGit: instalacao HTTPS e sincronizacao Git por SSH privado LAN/VPN.
 
-Python 3.10+ (desenvolvimento); PyInstaller gera executaveis independentes.
-O daemon nao e necessario: o Git post-receive ativa o deploy no servidor.
+A versao padrao instala-se por HTTPS no PC e na VPS, mas comunica-se
+via SSH na rede interna; nao exige porta SSH acessivel pelo IP publico.
+Hook post-receive faz deploy por branch quando autorizado explicitamente.
+O HTTPS Pull Agent e opcional quando SSH nao funciona nem pela LAN.
 """
 from __future__ import annotations
 
