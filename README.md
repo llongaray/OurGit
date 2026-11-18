@@ -96,7 +96,7 @@ python ourgit.py --version
 python -m unittest discover -s tests -v
 ~~~
 
-Em commits/PRs, `.github/workflows/ci.yml` testa Windows e Linux. Ao criar tag `v0.1.0`, a workflow `.github/workflows/release.yml` compila `ourgit.exe` e `ourgit`, publica ZIP/TAR.GZ e arquivo `checksums.txt` na Release.
+Em commits/PRs, `.github/workflows/ci.yml` testa Windows e Linux. A primeira execução bem-sucedida da workflow `.github/workflows/release.yml` na branch `main` publica automaticamente a release `v0.1.0`; futuras versões são lançadas criando tags `vX.Y.Z`. Os pacotes incluem `ourgit.exe`, `ourgit`, ZIP/TAR.GZ e `checksums.txt`.
 
 ## Roadmap
 
