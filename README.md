@@ -168,6 +168,18 @@ O checksum ajuda a verificar integridade, mas **não equivale a assinatura cript
 
 ## Compatibilidade Windows e assinatura empresarial (v0.3.1)
 
+**Comparar 0.2.0 e 0.3.1 sem executar os binários e sem alterar a política:**
+
+~~~powershell
+Invoke-WebRequest https://raw.githubusercontent.com/llongaray/OurGit/main/scripts/diagnose_windows_appcontrol.ps1 -OutFile "$env:TEMP\diagnose-ourgit.ps1"
+notepad "$env:TEMP\diagnose-ourgit.ps1"
+# Executar somente se a politica da empresa permitir a execucao deste script revisado.
+powershell.exe -NoProfile -File "$env:TEMP\diagnose-ourgit.ps1" -CompareReleases
+~~~
+
+O relatório lê eventos Code Integrity 3077/3089/3092, verifica hashes SHA-256 dos arquivos e assinaturas Authenticode. Os arquivos binários de ambas as Releases são **baixados apenas para inspeção, nunca executados**. A ausência de eventos antigos não prova que uma versão esteja atualmente autorizada. A decisão de liberar o aplicativo pertence à equipe de segurança que mantém a política.
+
+
 O Windows pode impedir a execução do `ourgit.exe` quando uma política **App Control for Business / Code Integrity (evento 3077)** exige código autorizado. Isso **não é um erro de Git nem da porta SSH**. Um executável PyInstaller sem assinatura Authenticode pode ser bloqueado mesmo após o download via HTTPS e a conferência do SHA-256. Uma assinatura válida também **não garante** autorização: a regra aplicada pela organização precisa aceitar o certificado/publicador ou hash específico.
 
 **Instalação com proteção contra atualizações bloqueadas:** o `install/install.ps1` valida ZIP/SHA-256, consulta o estado da assinatura Authenticode, faz cópia de segurança do `ourgit.exe` atual e testa a nova versão no caminho final. Se o Windows bloquear a execução, registra a ocorrência de Code Integrity quando disponível e **restaura o executável anterior**. O script **não desativa** Defender, App Control, AppLocker ou Execution Policy. Se não existir instalação anterior, remove o novo arquivo que falhou.
@@ -857,6 +869,18 @@ Assets: [latest release](https://github.com/llongaray/OurGit/releases/latest) ·
 A checksum is an integrity mechanism, **not an independent cryptographic signature**. For production, review and pin the required release version and verify provenance.
 
 ## Windows enterprise compatibility and code signing (v0.3.1)
+
+**Compare 0.2.0 and 0.3.1 without executing binaries or modifying policy:**
+
+~~~powershell
+Invoke-WebRequest https://raw.githubusercontent.com/llongaray/OurGit/main/scripts/diagnose_windows_appcontrol.ps1 -OutFile "$env:TEMP\diagnose-ourgit.ps1"
+notepad "$env:TEMP\diagnose-ourgit.ps1"
+# Run only if company policy permits this reviewed diagnostic script.
+powershell.exe -NoProfile -File "$env:TEMP\diagnose-ourgit.ps1" -CompareReleases
+~~~
+
+The read-only report inspects Code Integrity event IDs 3077/3089/3092 and hashes/Authenticode signatures of both official Release ZIPs, **without running either downloaded EXE**. Missing historical events do not establish current permission. The enterprise policy administrator must approve any software authorization.
+
 
 Corporate **App Control for Business / Code Integrity event 3077** can block an unsigned PyInstaller Windows executable even after HTTPS delivery and checksum verification. This is not a Git/SSH problem. Even a valid Authenticode signature does **not** automatically satisfy an enterprise policy; IT must approve the publisher/certificate or the exact file hash.
 
