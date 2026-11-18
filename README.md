@@ -637,6 +637,8 @@ Com `--apply`, o OurGit chama `git revert --no-edit` após confirmar que a workt
 
 ### Pipeline de histórico e auditoria
 
+A v0.3.0 também inclui o workflow [`.github/workflows/history.yml`](.github/workflows/history.yml), que executa a cada push e pode ser iniciado manualmente pela aba **Actions → OurGit - Histórico de Commits → Run workflow**. Ele gera um arquivo `ourgit-history.json` como artefato de CI (retenção de sete dias), usando o próprio Git do repositório e **sem servidor dedicado**. Em execuções automáticas, o relatório **oculta hostname, IP LAN e IP público**, mesmo que tais campos estejam incorporados aos commits. Para gerar um relatório com esses dados, é necessário um disparo manual com a opção `include_network_metadata=true` e autorização para a exposição a quem puder acessar os artefatos do repositório. O workflow não consegue descobrir retroativamente de qual máquina saiu um commit antigo sem metadados gravados no momento da criação.
+
 O formato JSON já permite que outras ferramentas ou GitHub Actions consumam o histórico, por exemplo:
 
 ```powershell
@@ -1253,6 +1255,8 @@ ourgit revert 9e8f7a6 --apply
 The apply form requires a clean working tree and creates an inverse commit using `git revert --no-edit`. The original historical commit is kept. Merge/root reverts and complex conflicts need manual Git resolution.
 
 ### Use history JSON in pipelines
+
+Version 0.3.0 also ships [`.github/workflows/history.yml`](.github/workflows/history.yml), which runs on push and supports manual execution under **Actions → OurGit - Histórico de Commits → Run workflow**. It creates a seven-day `ourgit-history.json` workflow artifact using native Git, **without any dedicated history server**. Automatic reports **redact hostname, LAN IP and public egress IP**, even when embedded in commit trailers. Including those fields requires a manually dispatched run with `include_network_metadata=true` and an explicit review of who can access the resulting artifact. A CI runner cannot retrospectively infer the actual developer machine or network address of a historical commit without data recorded at commit time.
 
 ```powershell
 ourgit history --all --limit 100 --json |
