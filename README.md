@@ -166,6 +166,40 @@ sh /tmp/install-ourgit.sh
 
 O checksum ajuda a verificar integridade, mas **não equivale a assinatura criptográfica independente**. Para produção corporativa, fixe uma versão e valide sua proveniência antes de executar qualquer instalador externo.
 
+## Compatibilidade Windows e assinatura empresarial (v0.3.1)
+
+O Windows pode impedir a execução do `ourgit.exe` quando uma política **App Control for Business / Code Integrity (evento 3077)** exige código autorizado. Isso **não é um erro de Git nem da porta SSH**. Um executável PyInstaller sem assinatura Authenticode pode ser bloqueado mesmo após o download via HTTPS e a conferência do SHA-256. Uma assinatura válida também **não garante** autorização: a regra aplicada pela organização precisa aceitar o certificado/publicador ou hash específico.
+
+**Instalação com proteção contra atualizações bloqueadas:** o `install/install.ps1` valida ZIP/SHA-256, consulta o estado da assinatura Authenticode, faz cópia de segurança do `ourgit.exe` atual e testa a nova versão no caminho final. Se o Windows bloquear a execução, registra a ocorrência de Code Integrity quando disponível e **restaura o executável anterior**. O script **não desativa** Defender, App Control, AppLocker ou Execution Policy. Se não existir instalação anterior, remove o novo arquivo que falhou.
+
+No computador Windows corporativo, para solicitar à TI uma autorização segura:
+
+~~~powershell
+$exe = "$env:LOCALAPPDATA\Programs\OurGit\ourgit.exe"
+Get-AuthenticodeSignature -LiteralPath $exe | Format-List Status, SignerCertificate
+Get-FileHash -LiteralPath $exe -Algorithm SHA256
+Get-WinEvent -FilterHashtable @{ LogName = "Microsoft-Windows-CodeIntegrity/Operational"; StartTime = (Get-Date).AddHours(-2); Id = 3077 } -ErrorAction SilentlyContinue | Where-Object { $_.Message -match "ourgit.exe" } | Select-Object -First 5 TimeCreated, Id, Message | Format-List
+~~~
+
+**Opções de instalação para ambientes com requisitos de assinatura:**
+
+~~~powershell
+# Exigir assinatura Authenticode confiável pela máquina atual
+$env:OURGIT_REQUIRE_SIGNED = "1"
+irm https://raw.githubusercontent.com/llongaray/OurGit/main/install/install.ps1 | iex
+
+# Opcional: exigir também o thumbprint do certificado aprovado pela TI
+$env:OURGIT_TRUSTED_SIGNER_THUMBPRINT = "THUMBPRINT_APROVADO_PELA_TI"
+~~~
+
+Não configure um thumbprint fictício: obtenha-o do certificado real, devidamente homologado. Se a Release for não assinada, `OURGIT_REQUIRE_SIGNED=1` interrompe a instalação sem substituir a versão anterior.
+
+**Assinatura no GitHub Actions:** `scripts/sign_windows.ps1` pode aplicar Authenticode utilizando um certificado Code Signing aprovado pela organização (PFX) e carimbo de tempo RFC 3161. Configure um **GitHub Environment protegido** chamado `ourgit-code-signing`, restrinja branches/tags autorizados e habilite aprovação dos responsáveis. Nesse Environment, disponibilize os secrets `OURGIT_CODESIGN_PFX_BASE64` (PFX codificado em base64) e `OURGIT_CODESIGN_PFX_PASSWORD`, exclusivamente se a política corporativa permitir hospedar a chave dessa forma. Considere HSM/serviço de assinatura remota quando o certificado não puder ser exportado. Para bloquear publicação não assinada, configure a variável `OURGIT_REQUIRE_SIGNED_RELEASE=1`.
+
+A Release inclui o relatório `windows-signature.json`, com `signing_mode`, publicador, thumbprint e hash do executável. **Sem certificado aprovado configurado, o pipeline distribui um executável não assinado**, explicitamente identificado; a distribuição ainda poderá ser bloqueada no seu Windows. A autorização final depende da equipe que controla a política Code Integrity.
+
+---
+
 ## Preparar SSH privado na LAN
 
 A instalação via HTTPS e a sincronização por SSH são independentes.
@@ -821,6 +855,37 @@ sh /tmp/install-ourgit.sh
 Assets: [latest release](https://github.com/llongaray/OurGit/releases/latest) · [Windows ZIP](https://github.com/llongaray/OurGit/releases/latest/download/ourgit-windows-x86_64.zip) · [Linux TAR.GZ](https://github.com/llongaray/OurGit/releases/latest/download/ourgit-linux-x86_64.tar.gz) · [checksums.txt](https://github.com/llongaray/OurGit/releases/latest/download/checksums.txt).
 
 A checksum is an integrity mechanism, **not an independent cryptographic signature**. For production, review and pin the required release version and verify provenance.
+
+## Windows enterprise compatibility and code signing (v0.3.1)
+
+Corporate **App Control for Business / Code Integrity event 3077** can block an unsigned PyInstaller Windows executable even after HTTPS delivery and checksum verification. This is not a Git/SSH problem. Even a valid Authenticode signature does **not** automatically satisfy an enterprise policy; IT must approve the publisher/certificate or the exact file hash.
+
+**Safe installer update and rollback:** `install/install.ps1` verifies archive SHA-256, checks Authenticode status, backs up the previous `ourgit.exe`, then tests the candidate at its final installation path. On an application-control block or other execution failure, it restores the previous file, without disabling Defender, App Control, AppLocker, or execution policies. If there was no previous installation, it removes the failed candidate.
+
+~~~powershell
+$exe = "$env:LOCALAPPDATA\Programs\OurGit\ourgit.exe"
+Get-AuthenticodeSignature -LiteralPath $exe | Format-List Status, SignerCertificate
+Get-FileHash -LiteralPath $exe -Algorithm SHA256
+Get-WinEvent -FilterHashtable @{ LogName = "Microsoft-Windows-CodeIntegrity/Operational"; StartTime = (Get-Date).AddHours(-2); Id = 3077 } -ErrorAction SilentlyContinue | Where-Object { $_.Message -match "ourgit.exe" } | Select-Object -First 5 TimeCreated, Id, Message | Format-List
+~~~
+
+To **require a Windows-trusted signature** before installing:
+
+~~~powershell
+$env:OURGIT_REQUIRE_SIGNED = "1"
+irm https://raw.githubusercontent.com/llongaray/OurGit/main/install/install.ps1 | iex
+
+# Optional: require an IT-approved code-signing certificate thumbprint
+$env:OURGIT_TRUSTED_SIGNER_THUMBPRINT = "IT_APPROVED_THUMBPRINT"
+~~~
+
+Do not use a fabricated thumbprint. An unsigned Release is rejected before replacing the installed binary when `OURGIT_REQUIRE_SIGNED=1`.
+
+**CI signing:** `scripts/sign_windows.ps1` supports an organization-approved exportable Authenticode PFX and trusted timestamping. Configure a **protected GitHub Environment** named `ourgit-code-signing`, with authorized branch/tag restrictions and reviewers. Add secrets `OURGIT_CODESIGN_PFX_BASE64` and `OURGIT_CODESIGN_PFX_PASSWORD` to that Environment only if company key-management rules permit this approach. Prefer managed signing/HSM if private keys must not be exported. To prohibit an unsigned release, set `OURGIT_REQUIRE_SIGNED_RELEASE=1` in the Environment variables.
+
+The published `windows-signature.json` reports signing mode, signer and executable SHA-256. **Without configured credentials, the Windows build remains unsigned and may still be blocked**. Final enforcement is determined by the organization's Code Integrity policy.
+
+---
 
 ## Prepare private LAN SSH
 

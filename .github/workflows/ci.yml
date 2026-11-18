@@ -22,3 +22,18 @@ jobs:
         run: python -m compileall -q ourgit.py tests
       - name: Testar sincronizacao e actions
         run: python -m unittest discover -s tests -v
+      - name: Validar sintaxe dos instaladores PowerShell (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $scripts = @('install/install.ps1', 'scripts/sign_windows.ps1')
+          foreach ($file in $scripts) {
+            $tokens = $null
+            $errors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $errors | Format-List | Out-String | Write-Host
+              throw "Erro de sintaxe no script PowerShell: $file"
+            }
+            Write-Host "PowerShell parse OK: $file"
+          }

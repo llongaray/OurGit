@@ -17,6 +17,7 @@ jobs:
           - os: windows-2022
             platform: windows
     runs-on: ${{ matrix.os }}
+    environment: ${{ matrix.platform == 'windows' && 'ourgit-code-signing' || 'ourgit-build' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

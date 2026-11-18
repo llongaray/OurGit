@@ -58,9 +58,8 @@ try {
     $line = Get-Content -LiteralPath $checksums |
         Where-Object { $_ -match ('^[a-fA-F0-9]{64}  ' + [regex]::Escape($asset) + '$') } |
         Select-Object -First 1
-    if (-not $line -or $line -notmatch '^([a-fA-F0-9]{64})  ') {
-        throw "Checksum SHA-256 ausente no arquivo publicado."
-    }
+    if (-not $line) { throw "Checksum SHA-256 ausente no arquivo publicado." }
+    if (-not ($line -match '^([a-fA-F0-9]{64})  ')) { throw "Checksum SHA-256 com formato invalido." }
     $expected = $Matches[1].ToLowerInvariant()
     $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($expected -ne $actual) { throw "Checksum SHA-256 divergente. Instalacao cancelada." }
